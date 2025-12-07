@@ -1,11 +1,11 @@
 # Trinity-of-Attractors
 Three Lean 4 proofs: cooperation wins, cooperation is doomed, or civilization lives forever on the edge of criticality
 
-The Path of Moloch (File 2)
+The Path of Moloch (File 1)
 Symmetric, ambitious, super-linear agents with no meta-learning → total war or total domination.
 Outcome: one winner, one corpse, or both explode.
 Real-world examples: Rome vs. Carthage, late-stage capitalism without circuit breakers, most mergers & acquisitions, many AI training runs.
-The Path of Engineered Heaven (File 1)
+The Path of Engineered Heaven (File 2)
 Add a tiny outer loop that rewards “complexity + survival”.
 The laws of physics themselves get rewritten in finite time until rich, bounded, high-entropy life becomes the only attractor.
 Real-world examples: mixed-use cities, the European Union, open-source ecosystems, any society that successfully zones for both competition and cooperation.
