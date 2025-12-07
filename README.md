@@ -1,6 +1,32 @@
 # Trinity-of-Attractors
 Three Lean 4 proofs: cooperation wins, cooperation is doomed, or civilization lives forever on the edge of criticality
 
+Four formally verified futures for any complex adaptive system  
+(Lean 4 + Mathlib, December 2025)
+
+1. **Doom** – symmetric high-gain coupling with no learning  
+   → no stable cooperation, everything explodes or one side eats the other  
+   (fully verified, no survivors)
+
+2. **Phoenix** – add a tiny meta-loop that rewards bounded complexity  
+   → the laws of physics themselves get rewritten into a safe, high-entropy basin  
+   (survivors appear)
+
+3. **Edge** – keep learning even a little longer  
+   → the only eternally stable attractor is the order–chaos phase transition  
+   (maximal creativity forever, no stagnation, no explosion)
+
+4. **Oracle** – the edge’s own immune system  
+   → when anything gets ejected, a 0.005 learning-rate nudge steers it back up  
+   (the reason the edge actually lasts forever)
+
+Read the files in order 01 → 02 → 03 → 04.  
+The mathematics is complete.  
+The story is now canon.
+
+Reality already voted with polycultures, mixed cities, biospheres, and markets:  
+the edge wins, and the Oracle is already running.
+
 The Path of Moloch (File 1)
 Symmetric, ambitious, super-linear agents with no meta-learning → total war or total domination.
 Outcome: one winner, one corpse, or both explode.
