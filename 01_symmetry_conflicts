@@ -1,0 +1,247 @@
+namespace Trinity
+namespace Conflict
+
+open Matrix
+
+abbrev PhaseSpace := Fin 2 → ℝ
+
+instance : NormedAddCommGroup PhaseSpace := Pi.normedAddCommGroup
+instance : NormedSpace ℝ PhaseSpace := Pi.normedSpace
+
+def normSq (x : PhaseSpace) : ℝ := x 0 ^ 2 + x 1 ^ 2
+def distSq (x y : PhaseSpace) : ℝ := normSq (x - y)
+
+structure DiscreteSystem where
+  step : PhaseSpace → PhaseSpace
+
+def iterate (sys : DiscreteSystem) : ℕ → PhaseSpace → PhaseSpace
+  | 0,   x => x
+  | n+1, x => iterate sys n (sys.step x)
+
+def toy_step (a b : ℝ) (x : PhaseSpace) : PhaseSpace := fun i =>
+  if i = 0
+    then -x 0 - 5 * x 0 ^ 3 + a * (x 1 - x 0)
+    else -x 1 - 5 * x 1 ^ 3 + b * (x 0 - x 1)
+
+def toy_system (a b : ℝ) : DiscreteSystem := { step := toy_step a b }
+
+def lyapunov_stable (sys : DiscreteSystem) (p : PhaseSpace) : Prop :=
+  ∀ ε > 0, ∃ δ > 0, ∀ y, distSq y p < δ → ∀ t, distSq (iterate sys t y) p < ε
+
+def NashEquilibrium (sys : DiscreteSystem) (p : PhaseSpace) : Prop :=
+  sys.step p = p ∧ lyapunov_stable sys p
+
+def Conflict (sys : DiscreteSystem) : Prop := ¬∃ p, NashEquilibrium sys p
+
+def J (a b : ℝ) (x : PhaseSpace) : Matrix (Fin 2) (Fin 2) ℝ :=
+  let p := x 0; let n := x 1
+  !![ -1 - 15*p^2 - a , a
+    ; b               , -1 - 15*n^2 - b ]
+
+def a := 4
+def b := 4
+
+theorem origin_fixed : toy_step a b 0 = 0 := by
+  ext i; fin_cases i <;> simp [toy_step, a, b] <;> ring
+
+theorem J_at_origin : J a b 0 = !![ -5, 4 ; 4, -5 ] := by
+  simp [J, a, b] <;> rfl
+
+def v_exp : PhaseSpace := fun i => if i = 0 then 1 else -1
+
+theorem expanding_eigenvalue_at_origin :
+    (J a b 0).mulVec v_exp = (-9 : ℝ) • v_exp := by
+  ext i; fin_cases i <;> simp [J_at_origin, v_exp, Matrix.mulVec, Matrix.dotProduct] <;> ring
+
+theorem linear_growth_exact (ε : ℝ) :
+    ∀ t, (J a b 0 ^ t).mulVec (ε • v_exp) = ε • ((-9)^t • v_exp) := by
+  intro t
+  induction' t with t ih
+  · simp [pow_zero]
+  · rw [pow_succ, Matrix.mul_mulVec, ih, expanding_eigenvalue_at_origin]
+    ring_nf
+
+theorem linear_normSq (ε : ℝ) (t : ℕ) :
+    normSq ((J a b 0 ^ t).mulVec (ε • v_exp)) = 2 * ε^2 * 81^t := by
+  rw [linear_growth_exact, normSq, v_exp]
+  simp [smul_apply] ; ring
+
+theorem sup_norm_L : ‖(J a b 0 : Matrix (Fin 2) (Fin 2) ℝ)‖_[∞] ≤ 10 := by
+  rw [Matrix.opNorm_le_iff]
+  intro v
+  simp [J_at_origin, Matrix.mulVec, Matrix.dotProduct]
+  repeat (first | apply abs_add_le | apply abs_mul_le)
+  linarith
+
+theorem sup_norm_pow (n : ℕ) :
+    ‖(J a b 0 ^ n : Matrix (Fin 2) (Fin 2) ℝ)‖_[∞] ≤ 10^n := by
+  induction' n with n ih
+  · simp
+  · calc ‖J a b 0 ^ (n+1)‖_[∞] = ‖J a b 0 ⬝ J a b 0 ^ n‖_[∞] ≤ ‖J a b 0‖_[∞] * ‖J a b 0 ^ n‖_[∞] := Matrix.norm_mul_le _ _
+                    _ ≤ 10 * 10^n := by gcongr
+
+theorem sup_to_euclid (u : PhaseSpace) :
+    ‖u‖_[∞] ≤ ‖u‖ ≤ √2 * ‖u‖_[∞] := by
+  constructor
+  · apply Finset.sup_le_iff.mpr
+    rintro ⟨i, _⟩; simp [normSq, Real.sqrt_le_iff, mul_nonneg] ; linarith
+  · simp [normSq] ; apply Finset.sum_le_card_nsmul
+    intro i _; apply sq_le ; apply abs_nonneg
+
+theorem N_cubic_bound (ε : ℝ) (hε : 0 < ε) (hε₁ : ε ≤ 1/2)
+    (u : PhaseSpace) (hu : ‖u‖_[∞] ≤ ε) :
+    ‖toy_step a b u - (J a b 0).mulVec u‖² ≤ 40 * ε^6 := by
+  have : ∀ i, |toy_step a b u i - (J a b 0).mulVec u i| ≤ 5 * ε^3 := by
+    intro i; fin_cases i <;>
+      simp [toy_step, J, a, b, Matrix.mulVec, Matrix.dotProduct] <;>
+      repeat (apply abs_sub_le) <;>
+      linarith [pow_nonneg (u ·) 2, hu]
+  calc
+    ‖toy_step a b u - (J a b 0).mulVec u‖²
+        = ∑ i, |toy_step a b u i - (J a b 0).mulVec u i|^2 := by
+      simp [normSq, sub_apply, Fin.sum_univ_two]
+    _ ≤ ∑ i, (5 * ε^3)^2 := by
+      gcongr i<_ : 2
+      apply sq_le_sq' ; linarith ; apply this
+    _ = 2 * 25 * ε^6 := by simp ; ring
+    _ ≤ 40 * ε^6 := by nlinarith
+
+theorem remainder_bound (ε : ℝ) (hε : 0 < ε) (hεsmall : ε ≤ 1/100) (t : ℕ) :
+    ‖iterate (toy_system a b) t (ε • v_exp) - (J a b 0 ^ t).mulVec (ε • v_exp)‖²
+      ≤ t * 40 * ε^6 * (10 : ℝ)^(2*t) := by
+  induction' t with t ih
+  · simp ; norm_num
+  · let u₀ := ε • v_exp
+    let prev := iterate (toy_system a b) t u₀
+    have decomp :
+      iterate (toy_system a b) (t+1) u₀ - (J a b 0 ^ (t+1)).mulVec u₀
+      = (J a b 0).mulVec (prev - (J a b 0 ^ t).mulVec u₀)
+      + (toy_step a b prev - (J a b 0).mulVec prev) := by
+      simp [iterate, pow_succ, Matrix.mul_mulVec] ; ring
+    rw [decomp, normSq_add]
+    apply add_le_add
+    · -- linear part
+      calc ‖(J a b 0).mulVec (prev - (J a b 0 ^ t).mulVec u₀)‖²
+          ≤ (10 * ‖prev - (J a b 0 ^ t).mulVec u₀‖_[∞])^2 := by
+        apply (sup_to_euclid _).2.trans
+        apply pow_le_pow_of_le_left
+        apply (sup_norm_pow _).trans
+        apply mul_le_mul_of_nonneg_left (sup_to_euclid _).1
+        norm_num
+      _ ≤ 100 * ‖prev - (J a b 0 ^ t).mulVec u₀‖² := by
+          have : (√2 * 10)^2 = 200 := by norm_num ; ring
+          nlinarith
+      _ ≤ 100 * ih := by gcongr
+      _ ≤ 100 * (t * 40 * ε^6 * 10^(2*t)) := by gcongr
+      _ = t * 40 * ε^6 * 10^(2*(t+1)) / 10 := by ring_nf ; field_simp ; ring
+      _ ≤ t * 40 * ε^6 * 10^(2*(t+1)) := by nlinarith
+    · -- nonlinear remainder
+      have prev_small : ‖prev‖_[∞] ≤ ε + √(t * 40 * ε^6 * 10^(2*t)) * √2 := by
+        calc ‖prev‖_[∞] ≤ ‖(J a b 0 ^ t).mulVec u₀‖_[∞] + ‖prev - _‖_[∞] := norm_add_le _ _
+          _ ≤ 10^t * ‖u₀‖_[∞] + √(ih) * √2 := by
+            gcongr
+            · exact (sup_norm_pow t).trans (by simp)
+            · exact (sup_to_euclid _).2
+          _ = ε * 10^t + √(t * 40 * ε^6 * 10^(2*t)) * √2 := by simp [normSq_smul, v_exp]
+          _ ≤ ε * 10^t + ε^3 * 10^t * √(t*80) := by
+            gcongr
+            apply Real.sqrt_le_sqrt
+            apply mul_le_mul_of_nonneg_left _ (by norm_num)
+            exact √(t*40)*10^t * ε^3
+      have : √(t*80) ≤ t+1 := by
+        by_cases ht : t = 0 ; · simp
+        have : (t:ℝ) ≥ 1 := by simp [ht] ; nlinarith
+        calc √(t*80) ≤ √(t*t*80) := by gcongr ; exact le_mul_self _
+                 _ = t*√80 := Real.sqrt_mul (by norm_num) _
+                 _ ≤ t*9 := by nlinarith
+                 _ ≤ t+1 := by linarith
+      hence prev_small' : ‖prev‖_[∞] ≤ ε * 10^t * (1 + ε^2 * 9) := by
+        linarith [hεsmall]
+      have : ε * 10^t * (1 + ε^2 * 9) ≤ 1/2 := by
+        calc ε * 10^t * (1 + ε^2 * 9) ≤ ε * 10^t * (1 + (1/10000)*9) := by gcongr
+          _ ≤ ε * 10^t * (1 + 1/1000) := by nlinarith
+          _ ≤ (1/100) * 10^t * 1.001 := by gcongr
+          _ ≤ 10^t / 100 * 1.001 := by ring
+          _ ≤ 10^t / 99 := by nlinarith
+          _ ≤ 1/2 := by
+            apply (pow_le (by norm_num : (10:ℝ) > 1)).mpr
+            apply one_le_pow_of_one_le (by norm_num) t
+            nlinarith
+      exact (N_cubic_bound ε hε (by linarith) prev (by linarith)).trans (by nlinarith)
+
+theorem escape_in_expanding_direction :
+    ∀ ε > 0, ε ≤ 1/100 → ∃ t, 1 ≤ distSq (iterate (toy_system a b) t (ε • v_exp)) 0 := by
+  intro ε ε_pos ε_small
+  obtain ⟨k, hk⟩ := exists_nat_pow_gt (81 : ℝ) (10000/ε^2)
+  let t := k + 12
+  have linear_big : 2 * ε^2 * 81^t ≥ 4 := by
+    calc 2 * ε^2 * 81^t = 2 * ε^2 * 81^12 * 81^k ≥ 2 * ε^2 * 81^12 * (10000/ε^2) := by gcongr
+      _ ≥ 2 * 81^12 * (10000/ε^2) * ε^2 / 10000 := by nlinarith
+      _ = 2 * 81^12 / 5000 := by field_simp ; ring
+      _ ≥ 4 := by norm_num
+  have remainder_small : t * 40 * ε^6 * 10^(2*t) ≤ 2 := by
+    calc t * 40 * ε^6 * 10^(2*t) ≤ (k+12) * 40 * (1/100)^6 * 100^t := by
+        gcongr ; exact ε_small ; exact Nat.le_add_left _ _
+      _ ≤ (k+12) * 40 * 10^(2*t) / 10^12 := by
+        gcongr ; norm_num
+      _ ≤ 10^(2*t) * (k+12) * 40 / 10^12 := by ring_nf
+      _ ≤ 10^(2*t) * 10^t * 52 / 10^12 := by
+        gcongr
+        · apply Nat.lt_succ_iff.mp ; exact Nat.lt.base _
+        · norm_num
+      _ = 52 * 10^(3*t) / 10^12 := by ring
+      _ ≤ 52 * 10^(3*(k+12)) / 10^12 := by gcongr
+      _ ≤ 52 * 10^(3k) / 10^12 := by gcongr
+      _ ≤ 52 * (81^k)^3 / 10^12 := by
+        gcongr ; apply pow_le_pow_of_le_left ; norm_num
+      _ ≤ 52 * (10000/ε^2)^3 / 10^12 := by gcongr ; exact hk.le
+      _ ≤ 52 * 10^12 / ε^6 / 10^12 := by
+        gcongr ; norm_num
+      _ ≤ 52 / ε^6 * ε^6 := by field_simp ; ring
+      _ ≤ 52 := by nlinarith
+      _ ≤ 2 := by norm_num
+  have : distSq (iterate (toy_system a b) t (ε • v_exp)) 0 ≥
+          2 * ε^2 * 81^t - √(t*40*ε^6*10^(2*t))*2*√(2*ε^2*81^t) := by
+    apply normSq_sub_ge_of_sub_small (remainder_bound ε ε_pos ε_small t)
+    apply Real.sqrt_le_sqrt.mpr
+    apply remainder_small.trans
+    nlinarith
+  also have : _ ≥ 4 - √2 * √2 * 2 := by
+    linarith [linear_big, remainder_small]
+  calc _ ≥ 4 - 2*2 := by gcongr
+     _ ≥ 1 := by norm_num
+
+theorem no_lyapunov_stable_fixed_point :
+    ∀ p, ¬ lyapunov_stable (toy_system a b) p := by
+  intro p hp
+  obtain ⟨t, ht⟩ := escape_in_expanding_direction (1/200) (by norm_num) (by norm_num)
+  rcases hp 1 (by norm_num) with ⟨δ, δpos, hδ⟩
+  let y i := p i + (1/200) * v_exp i
+  have dy : distSq y p = normSq ((1/200) • v_exp) := by
+    simp [distSq, normSq, sub_apply, v_exp] ; ring
+  have dy_small : distSq y p < δ := by
+    rw [dy] ; simp [normSq, v_exp] ; linarith [δpos]
+  have far : distSq (iterate (toy_system a b) t y) p ≥ 1 := by
+    calc distSq (iterate (toy_system a b) t y) p
+      ≥ distSq (iterate (toy_system a b) t y) 0 - distSq 0 p := by
+        apply norm_sub_ge_sub_norm (iterate _ _ _) _ _
+      _ ≥ 1 - ‖p‖² := by
+        calc distSq (iterate (toy_system a b) t y) 0
+          ≥ distSq (iterate (toy_system a b) t (ε • v_exp)) 0
+             - distSq (ε • v_exp) (y - p) := by
+            apply norm_sub_ge_sub_norm
+          _ ≥ 1 - (1/200 * 2) := by
+            gcongr
+            simp [normSq, v_exp, ε] ; norm_num
+          _ ≥ 0.99 := by norm_num
+      _ ≥ 1 := by linarith
+  exact absurd far (hδ dy_small t)
+
+theorem main_theorem : Conflict (toy_system a b) := by
+  simp [Conflict, NashEquilibrium]
+  push_neg
+  rintro p ⟨fixed, stable⟩
+  · exact no_lyapunov_stable_fixed_point p stable
+
+end Conflict
+end Trinity
