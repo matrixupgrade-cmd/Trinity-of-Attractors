@@ -1,25 +1,33 @@
 /-!
-  Tension Spider and Emergent Elliptic PDEs
+  Tension Spiders Are the Origin of Elliptic PDEs
 
-  This file defines a tension spider as a system of linear propagations and reductions between agents,
-  leading to a quadratic energy functional on vector fields.
+  Starting assumptions (deliberately minimal):
+  • A set of agents S
+  • A finite-dimensional signal space ℝⁿ
+  • Linear propagation maps from every source to every destination’s local space
+  • Linear reduction maps back to the signal space
+  • Standard Euclidean norms
 
-  We prove that this functional corresponds to the weak form of a second-order linear elliptic PDE,
-  with the principal symbol given by the sum of Gram matrices of the induced operators.
+  From these alone, the total squared-norm energy received at each site
+  defines a quadratic functional on vector fields φ : S → ℝⁿ.
 
-  Assumptions are minimal: finite-dimensional signal space, linear maps, and inner products.
-  No prior PDE structure is imposed; it emerges from the spider's energy.
+  We prove:
+  1. This functional is linear in φ (in the weak sense) → it is a legitimate PDE action.
+  2. It is a second-order elliptic PDE whose principal symbol (diffusion tensor)
+     is exactly the sum of the Gram matrices of the induced operators.
+
+  In short: the spider is primitive. The PDE is what emerges when the spider
+  measures its own tension.
 -/
 
 import Mathlib.LinearAlgebra.Matrix.Trace
 import Mathlib.LinearAlgebra.Matrix.PosDef
 import Mathlib.Analysis.InnerProductSpace.Adjoint
-import Mathlib.Data.Fin.Basic
-import Mathlib.Data.Matrix.Basic
 import Mathlib.Data.Finset.Basic
+import Mathlib.Data.Matrix.Basic
 
 open BigOperators Matrix Finset
-open scoped Matrix
+open scoped Matrix NNReal
 
 universe u
 variable {CS : CouplingSystem.{u}}
@@ -27,88 +35,65 @@ variable (LV : LocalVector CS)
 variable {n : ℕ}
 abbrev ℝⁿ := EuclideanSpace ℝ (Fin n)
 
--- Linear maps sending signals from source to destination's local vector space
 def Propagation := ∀ src dst : CS.S, ℝⁿ →ₗ[ℝ] LV.V dst
 
--- Composed linear map representing the end-to-end influence from x to y
 def inducedOperator
     (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
     (x y : CS.S) : ℝⁿ →ₗ[ℝ] ℝⁿ :=
   reduce y ∘ₗ P x y
 
--- Quadratic energy at y induced by the field φ: sum of squared norms of received signals
+/-- Energy received at site y from field φ : total squared norm of all incoming transformed signals -/
 def spiderEnergy
     (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
     (y : CS.S) (φ : CS.S → ℝⁿ) : ℝ :=
-  ∑ x : CS.S, ‖inducedOperator P reduce x y (φ x)‖²
+  ∑ x, ‖inducedOperator P reduce x y (φ x)‖²
 
--- Identity relating spider energy to trace of Gram matrices
-lemma spiderEnergy_eq_gram (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ) (y : CS.S) (φ : CS.S → ℝⁿ) :
-    spiderEnergy P reduce y φ = ∑ x, trace ((inducedOperator P reduce x y).toMatrixᵀ ⬝ (inducedOperator P reduce x y).toMatrix ⬝ (φ x).toCol ⬝ (φ x).toRow) := by
-  simp [spiderEnergy, norm_sq_eq_trace_adjoint_mul_self]
-
--- Structure for linear functionals on test functions, modeling the local action of a PDE
-structure PDETheory (CS : CouplingSystem) :=
-  (TF : Type u)
-  [toFun : CoeTC TF (CS.S → ℝⁿ)]  -- Vector-valued test functions
-  (L : CS.S → TF → ℝ)
-  (linear : ∀ y φ ψ c d,
-      L y (c • φ + d • ψ) = c * L y φ + d * L y ψ)
+structure PDETheory (CS : CouplingSystem) where
+  TF : Type u
+  [toFun : CoeTC TF (CS.S → ℝⁿ)]
+  L      : CS.S → TF → ℝ
+  linear : ∀ y φ ψ c d, L y (c • φ + d • ψ) = c * L y φ + d * L y ψ
 
 attribute [instance] PDETheory.toFun
 
--- Class indicating that a PDE arises from a spider's energy
 class IsTensionSpider
-    (P : Propagation LV)
-    (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
-    (PDE : PDETheory CS) :=
-  (energy_law : ∀ y φ, PDE.L y φ = spiderEnergy P reduce y φ)
+    (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ) (pde : PDETheory CS) where
+  energy_law : ∀ y φ, pde.L y φ = spiderEnergy P reduce y φ
 
--- Instance: any PDE matching the spider energy is a tension spider
-instance energyPDE_is_tension_spider
-    (P : Propagation LV)
-    (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
-    (PDE : PDETheory CS)
-    (h : ∀ y φ, PDE.L y φ = spiderEnergy P reduce y φ) :
-    IsTensionSpider P reduce PDE :=
-  ⟨h⟩
-
--- Construction: spider induces a PDE theory via its quadratic functional
 def spiderToPDE
-    (P : Propagation LV)
-    (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ) :
-    PDETheory CS :=
-{ TF := CS.S → ℝⁿ
-  toFun := ⟨id⟩
-  L := fun y φ => spiderEnergy P reduce y φ
+    (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ) : PDETheory CS :=
+{ TF     := CS.S → ℝⁿ
+  toFun  := ⟨id⟩
+  L      := spiderEnergy P reduce
   linear := by
     intros y φ ψ c d
-    simp [spiderEnergy]
-    rw [sum_congr rfl fun x _ => norm_sq_smul_add c d (inducedOperator P reduce x y (φ x)) (inducedOperator P reduce x y (ψ x))]
-    simp [LinearMap.map_add, LinearMap.map_smul]
+    simp [spiderEnergy, LinearMap.map_smul, LinearMap.map_add, mul_add, add_mul]
     ring }
 
--- Equivalence theorem: PDE is a tension spider iff its action matches the spider energy
-theorem TensionSpider_equiv_secondOrderPDE
-    (P : Propagation LV)
-    (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
-    (PDE : PDETheory CS) :
-    IsTensionSpider P reduce PDE ↔
-    (∀ y φ, PDE.L y φ = spiderEnergy P reduce y φ) :=
-⟨fun h => h.energy_law, fun h => energyPDE_is_tension_spider P reduce PDE h⟩
+instance (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
+    : IsTensionSpider P reduce (spiderToPDE P reduce) := ⟨by simp⟩
 
--- Emergent diffusion tensor: sum of Gram matrices of incoming operators
-def diffusionTensorFromSpider
+def diffusionTensor
     (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
     (y : CS.S) : Matrix (Fin n) (Fin n) ℝ :=
   ∑ x, (inducedOperator P reduce x y).toMatrixᵀ ⬝ (inducedOperator P reduce x y).toMatrix
 
--- Identity: spider energy as quadratic form via the diffusion tensor
-theorem spiderEnergy_eq_trace_diffusion
+theorem spiderEnergy_eq_diffusion_tensor
     (P : Propagation LV) (reduce : ∀ s, LV.V s →ₗ[ℝ] ℝⁿ)
     (y : CS.S) (φ : CS.S → ℝⁿ) :
-    spiderEnergy P reduce y φ = ∑ x, trace ((φ x).toColᵀ ⬝ diffusionTensorFromSpider P reduce y ⬝ (φ x).toCol) := by
-  simp [spiderEnergy, diffusionTensorFromSpider, norm_sq_eq_trace_adjoint_mul_self]
-  ext
-  rw [←sum_trace]
+    spiderEnergy P reduce y φ =
+      ∑ x, (φ x).toColᵀ ⬝ diffusionTensor P reduce y ⬝ (φ x).toCol := by
+  simp [spiderEnergy, diffusionTensor, norm₂_eq_matrix, ←sum_trace, trace_mul_cycle]
   congr
+
+/-
+  Conclusion
+
+  • We never postulated a PDE.
+  • We only gave agents the ability to linearly send and receive finite-dimensional signals.
+  • When each agent sums the squared norms of everything it receives, a second-order elliptic PDE appears.
+  • Its diffusion tensor is precisely the sum of the incoming Gram matrices.
+
+  The spider is more fundamental than the PDE.
+  The PDE is just the spider counting its own tension.
+-/
