@@ -1,3 +1,9 @@
+/*!
+_0vSpiderChip_diagram.txt
+Block diagram for Inner Tension Spider “chip” concept.
+Text-only diagram for reference and documentation.
+*/
+
 +15V ─────────────────────────────────────────────────────┐
                                                           │
        ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
