@@ -1,20 +1,10 @@
-# Trinity-of-Attractors
+# Emergent Order
 Structure of the Repository
-1. Universal Attractor Metamorphosis      
-emergent_order.lean
-01 02 03 04
 
-What it proves:
+00_emergent_order.lean
 
-A 2D discrete dynamical system where parameters evolve via a gradient-based learner.
-
-System initially in a chaotic regime (no stable Nash equilibrium) eventually enters a subcritical regime with bounded trajectories.
-
-Persistent positive entropy emerges, proving high information content in the attractor.
-
-Formalized properties: subcritical, bounded trajectories, positive entropy, meta-iteration of learner.
-
-Applications: Can be interpreted as a minimal model for adaptive systems where feedback mechanisms stabilize chaotic interactions.
+Overview:
+This Lean 4 + mathlib file provides a fully general, substrate-independent formalization of endogenous metamorphosis in coupled systems. It introduces the concept of an Inner Tension Spider, a mechanism that observes the system’s state and rewrites its own governing parameters from within. This allows a system to move between self-attractors without external forcing, producing internal attractor metamorphosis.
 
 2. Newton-Like Coupling Toy Systems
 emergent_geometry_extended.lean
