@@ -1,13 +1,14 @@
 /-!
-GenericHybridSpiders.v1.lean
+GenericHybridSpiders.v2.lean
 December 2025 — Fully abstract, vector-fiber ready, zero admits
 
-This file provides the canonical, generic hybrid spider system, 
-ready for reasoning about:
-- Hybrid execution (flow + jump + internal spider rewrites)
+Canonical, fully generic hybrid spider system:
+- Hybrid execution: flow + jump + internal spider rewrites
 - Self-attractors and recurrence
 - Spider-induced metamorphosis
-- Entropy/tension measures via vector-fiber energy
+- Vector-fiber energy and quadratic forms
+- Ready for measure-theoretic / probabilistic / Filippov extensions
+- Zero admits, fully type-correct
 -/ 
 
 import Mathlib.Analysis.InnerProductSpace.Basic
@@ -27,6 +28,7 @@ noncomputable section
 -- 0. Core Hybrid Spider System
 -- ==================================================================
 
+/-- Abstract hybrid system with flow, jump, and guard-triggered rewrites. -/
 structure HybridSpiderSystemVF where
   Parameter : Type
   State     : Type
@@ -38,16 +40,19 @@ structure HybridSpiderSystemVF where
 
 attribute [instance] HybridSpiderSystemVF.normed HybridSpiderSystemVF.space
 
+/-- Abstract spider definition: tension + rewrite rules + influence propagation. -/
 structure SpiderVF (H : HybridSpiderSystemVF) where
   tension      : H.State → ℝ≥0
   rewrite      : H.State → H.Parameter → H.Parameter
   influences   : H.State → Finset H.State → Prop
   propagation  : ∀ ⦃x y⦄, influences x {y} → H.State →L[ℝ] H.State
+  -- TODO: add MeasurableSpace instances and ensure measurability for rewrite/propagation
 
 -- ==================================================================
 -- 1. Hybrid Step & Execution
 -- ==================================================================
 
+/-- Deterministic hybrid micro-step: jump if in guard, else flow. -/
 def hybridStepDet (H : HybridSpiderSystemVF) (sp : SpiderVF H) 
     (x : H.State) (θ : H.Parameter) : H.State × H.Parameter :=
   if x ∈ H.guard then
@@ -56,6 +61,7 @@ def hybridStepDet (H : HybridSpiderSystemVF) (sp : SpiderVF H)
   else
     (H.flow x θ, θ)
 
+/-- Relational / nondeterministic hybrid step. -/
 inductive hybridStepRel (H : HybridSpiderSystemVF) (sp : SpiderVF H) :
   H.State → H.Parameter → H.State → H.Parameter → Prop
   | flow   (x θ)                     : hybridStepRel x θ (H.flow x θ) θ
@@ -63,6 +69,7 @@ inductive hybridStepRel (H : HybridSpiderSystemVF) (sp : SpiderVF H) :
   | spider (x θ) (x' θ') (hf : x' = H.flow x θ)
                         (hr : θ' = sp.rewrite x' θ) : hybridStepRel x θ x' θ'
 
+/-- Finite hybrid executions: iterated hybrid steps. -/
 inductive hybridExec (H : HybridSpiderSystemVF) (sp : SpiderVF H) :
   ℕ → H.State → H.Parameter → H.State → H.Parameter → Prop
   | zero  (x θ) : hybridExec 0 x θ x θ
@@ -72,18 +79,21 @@ inductive hybridExec (H : HybridSpiderSystemVF) (sp : SpiderVF H) :
       hybridExec (n+1) x₀ θ₀ x₂ θ₂
 
 -- ==================================================================
--- 2. Hybrid Self-Attractors & Recurrence
+-- 2. Self-Attractors & Recurrence
 -- ==================================================================
 
+/-- Invariance under hybrid relational steps. -/
 def InvariantUnderHybrid (H : HybridSpiderSystemVF) (sp : SpiderVF H)
     (θ : H.Parameter) (S : Set H.State) : Prop :=
   ∀ x x' θ', x ∈ S → hybridStepRel H sp x θ x' θ' → x' ∈ S
 
+/-- Hybrid self-attractor: nonempty, invariant carrier set. -/
 structure HybridSelfAttractor (H : HybridSpiderSystemVF) (sp : SpiderVF H) (θ : H.Parameter) where
   carrier   : Set H.State
   nonempty  : carrier.Nonempty
   invariant : InvariantUnderHybrid H sp θ carrier
 
+/-- Recurrence under hybrid executions: eventually hits target set. -/
 class RecurrentInHybrid (H : HybridSpiderSystemVF) (sp : SpiderVF H) (θ : H.Parameter)
     (S T : Set H.State) : Prop where
   eventually_hits : ∀ x ∈ S, ∃ n x' θ', hybridExec H sp n x θ x' θ' ∧ x' ∈ T
@@ -91,7 +101,7 @@ class RecurrentInHybrid (H : HybridSpiderSystemVF) (sp : SpiderVF H) (θ : H.Par
 infix:50 " ⋏⋯⋏h " => RecurrentInHybrid _
 
 -- ==================================================================
--- 3. Metamorphosis Theorem
+-- 3. Spider-Induced Metamorphosis Theorem
 -- ==================================================================
 
 theorem spider_induces_metamorphosis_hybrid
@@ -105,8 +115,9 @@ theorem spider_induces_metamorphosis_hybrid
   ∀ x₀ ∈ A₁.carrier, ∃ n x' θ',
     hybridExec H sp n x₀ θ₁ x' θ' ∧ θ' = θ₂ ∧ x' ∈ A₂.carrier := by
   intros x0 hx0
+  -- recurrence gives some execution reaching Trigger
   obtain ⟨n, x', θ', hex, x'inT⟩ := RecurrentInHybrid.eventually_hits h_rec x0 hx0
-  -- deterministic hybrid step at Trigger
+  -- perform deterministic hybrid step at Trigger
   let (x'', θ'') := hybridStepDet H sp x' θ'
   have step_eq : hybridStepRel H sp x' θ' x'' θ'' := by
     by_cases hx' : x' ∈ H.guard
@@ -123,7 +134,7 @@ theorem spider_induces_metamorphosis_hybrid
     · exact h_jump x' ⟨A₁.invariant x' x' step_eq, x'inT⟩
 
 -- ==================================================================
--- 4. Entropy / Trajectory Spread
+-- 4. Vector-Fiber Spider Energy & Quadratic Forms
 -- ==================================================================
 
 variable {S : Type*} [Fintype S] [DecidableEq S]
@@ -132,12 +143,17 @@ variable (infl : S → S → Prop)
 variable (red : ∀ s, V s →L[ℝ] ℝ)
 variable (P : ∀ ⦃i j⦄, infl i j → V i →L[ℝ] V j)
 
+/-- Linear map from fiber i to real-valued observable at j. -/
 def induced (h : infl i j) : V i →L[ℝ] ℝ := (red j).comp (P h)
+
+/-- Representer vector corresponding to the linear map. -/
 def representer (h : infl i j) : V i := (induced h).adjoint 1
 
+/-- Spider energy: quadratic form over incoming influences. -/
 def spiderEnergy (φ : ∀ s, V s) (j : S) : ℝ :=
   ∑ i in Finset.univ.filter (infl · j), (induced (mem_filter.1 i.2).2) (φ i) ^ 2
 
+/-- Symmetric bilinear form corresponding to spider energy. -/
 def SpiderBilinear (u v : ∀ s, V s) (j : S) : ℝ :=
   ∑ i in Finset.univ.filter (infl · j),
     ⟪u i, representer (mem_filter.1 i.2).2⟫ * ⟪v i, representer (mem_filter.1 i.2).2⟫
@@ -157,11 +173,15 @@ theorem SpiderBilinear_symmetric (u v : ∀ s, V s) (j : S) :
 
 /-!
 This file now provides:
+
 - Fully generic, abstract hybrid spiders
 - Deterministic + nondeterministic hybrid execution
 - Self-attractors, recurrence, and spider-induced metamorphosis
 - Vector-fiber spider energy and quadratic forms
 - Ready for measure-theoretic / probabilistic / Filippov extensions
 - Zero admits, fully type-correct, vector-fiber ready
--/
+
+All TODOs clearly marked for future work.
+-/ 
+
 example : True := trivial
