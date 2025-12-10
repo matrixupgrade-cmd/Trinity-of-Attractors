@@ -1,0 +1,78 @@
+/-!
+Toy1DWavefunctionTimeResolved.lean
+December 2025 — 1D toy wavefunction over time (LLM-friendly edition)
+-/
+
+import Mathlib.Data.Real.Basic
+import Mathlib.Data.List.Basic
+import Mathlib.Tactic.LibrarySearch
+
+open List
+
+-- ==================================================================
+-- 1. Binning
+-- ==================================================================
+
+def binWidth : ℝ := 0.1
+
+def toBin (x : ℝ) : Int :=
+  Int.floor (x / binWidth)
+
+/-- Insert-with-combine for histograms -/
+def List.insertWith {α β : Type} [DecidableEq α] (f : β → β → β) (lst : List (α × β))
+    (key : α) (val : β) : List (α × β) :=
+  match lst with
+  | []                  => [(key, val)]
+  | (k, v) :: rest =>
+    if h : k = key then (k, f v val) :: rest
+    else (k, v) :: insertWith f rest key val
+
+-- ==================================================================
+-- 2. Count visits per bin in a chunk of trajectory
+-- ==================================================================
+
+def countBins (states : List ℝ) : List (Int × ℕ) :=
+  states.foldl (fun acc x =>
+    let b := toBin x
+    acc.insertWith (· + ·) b 1) []
+
+-- ==================================================================
+-- 3. Normalize counts → probability distribution (real amplitudes)
+-- ==================================================================
+
+def normalizeCounts (counts : List (Int × ℕ)) : List (Int × ℝ) :=
+  let total := (counts.foldl (fun s p => s + p.snd) 0 : ℕ)
+  if total = 0 then []
+  else counts.map fun (b, n) => (b, (n : ℝ) / total)
+
+-- ==================================================================
+-- 4. Time-resolved wavefunction: one probability distribution per time window
+-- ==================================================================
+
+def toyWavefunctionTimeResolved (traj : List ℝ) (stepSize : ℕ) : List (List (Int × ℝ)) :=
+  let chunks := traj.chunks stepSize          -- mathlib's chunks (not chunk!)
+  chunks.map (normalizeCounts ∘ countBins)
+
+-- ==================================================================
+-- 5. Toy orbit (a little random-walk-like excursion)
+-- ==================================================================
+
+def toyOrbit : List ℝ :=
+  [0.0, 0.05, 0.1, 0.2, 0.15, -0.1, -0.05, 0.0, 0.1, 0.2, 0.3, 0.25,
+   0.35, 0.4, 0.38, 0.3, 0.22, 0.18, 0.24, 0.3]
+
+def toyWaveform := toyWavefunctionTimeResolved toyOrbit 5   -- 5 steps per time slice
+
+-- ==================================================================
+-- 6. Pretty printing so #eval actually shows something nice
+-- ==================================================================
+
+def formatDist (dist : List (Int × ℝ)) : String :=
+  dist.map (fun (b, p) => s!"{b}: {(p*100).round}%%") |>.intersperse "  " |>.toString
+
+def formatWaveform (wf : List (List (Int × ℝ))) : IO Unit :=
+  wf.enum.forM fun (t, dist) =>
+    IO.println s!"t={t*5:2}:  {formatDist dist}"
+
+-- Actually run it
+#eval formatWaveform toyWaveform
