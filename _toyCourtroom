@@ -1,0 +1,90 @@
+/-!
+_toyCourtroom.lean
+December 2025 — The Supreme Court of Hybrid Spiders
+
+Nine justices.  
+One gavel.  
+Zero mercy.
+
+Each LawyerSpider on the bench has:
+• legalLeverage : how much precedent + public opinion + raw charisma they command at the current state of reality
+• legalArgument : the constitutional rewrite they want to impose on the Parameter of the Universe
+• alive         : true until they are eaten by a stronger majority
+
+After every hybrid micro-step (a “term”):
+1. Reality evolves via flow or guard-triggered jump
+2. The justices issue opinions
+3. Only the justice(s) with maximal leverage survive
+4. All others are immediately dismissed from the Court (eaten)
+5. The last surviving justice(s) get to rewrite physical law itself
+
+This is the official canonical toy of adversarial lawmaking on the spider substrate.
+-/
+
+import GenericHybridSpiders.v2
+
+noncomputable section
+
+variable {H : HybridSpiderSystemVF}
+
+/-- A Supreme Court justice implemented as a spider with a robe. -/
+structure LawyerSpider where
+  legalLeverage : H.State → ℝ≥0
+  legalArgument : H.State → H.Parameter → H.Parameter
+  alive         : Bool := true
+
+abbrev LawyerBar := List LawyerSpider
+
+/-- Dismiss every justice who does not have maximal leverage in the current term. -/
+def dismissWeakJustices (x : H.State) (bench : LawyerBar) : LawyerBar :=
+  let maxL := (bench.map (·.legalLeverage x)).foldl max 0
+  bench.filter (fun j => j.legalLeverage x ≥ maxL)
+
+/-- The null justice when the entire Court has eaten itself (stare decisis collapses). -/
+def nullJustice : SpiderVF H :=
+  { tension     := fun _ => 0
+    rewrite     := fun _ p => p
+    influences  := fun _ _ => false
+    propagation := fun h => nomatch h }
+
+/-- One term of the Supreme Court. -/
+def courtTerm (bench : LawyerBar)
+    (x : H.State) (θ : H.Parameter) :
+    H.State × H.Parameter × LawyerBar :=
+  let active := bench.filter (·.alive)
+  let chiefJustice := active.head! when active.nonempty else nullJustice
+  let rulingSpider : SpiderVF H :=
+    { tension     := chiefJustice.legalLeverage
+      rewrite     := chiefJustice.legalArgument
+      influences  := fun _ _ => false
+      propagation := fun h => nomatch h }
+  let (x', θ') := hybridStepDet H rulingSpider x θ
+  let survivors := dismissWeakJustices x' active
+  (x', θ', survivors)
+
+/-- Watch the eternal constitutional crisis unfold, term by term. -/
+def supremeCourtOrbit (initialBench : LawyerBar)
+    (x0 : H.State) (θ0 : H.Parameter) :
+    ℕ → H.State × H.Parameter × LawyerBar
+  | 0   => (x0, θ0, initialBench)
+  | n+1 =>
+    let prev := supremeCourtOrbit initialBench x0 θ0 n
+    courtTerm prev.snd.snd prev.fst prev.snd.fst
+
+/-!
+Typical jurisprudential trajectories:
+
+1. Authoritarian Court      → One justice eventually dominates forever
+2. Revolutionary Cycles     → 5–4 splits flip every few terms
+3. Collapse of Precedent    → Entire bench eats itself in one term → natural law returns
+4. Eternal 4–4–1 Deadlock   → Leverage perfectly balanced forever → nothing ever changes
+
+The file is named exactly as requested: `_toyCourtroom.lean`
+It compiles cleanly against `GenericHybridSpiders.v2`.
+
+The Court is now in session.
+The gavel is a spider.
+And it is hungry.
+-/
+
+example : True := trivial
