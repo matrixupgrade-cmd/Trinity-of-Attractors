@@ -1,104 +1,85 @@
-import Mathlib.Data.Nat.Prime
 import Mathlib.Data.List.Basic
+import Mathlib.Data.Nat.Basic
 import Mathlib.Tactic
 
 open List Nat
 
-/--
-  Sum of a sequential list like `[1,2,3,4,5]` is triangular:
-  This checks whether a list is exactly `[1,2,...,k]`.
+/-- Build the sequential list starting at t whose sum reaches s.
+    Example:
+      s=13, t=1 → [1,2,3,4,3]
+      s=13, t=2 → [2,3,4,4]
+      s=13, t=3 → [3,4,5,1]
+      ...
 -/
-def isSequential (L : List Nat) : Bool :=
-  L == List.range (L.length + 1) |>.tail
+def buildSeq (s t : Nat) : List Nat :=
+  let rec go (n curSum : Nat) (acc : List Nat) :=
+    if curSum + (t + n) > s then
+      let r := s - curSum
+      if r = 0 then acc.reverse else (r :: acc).reverse
+    else
+      go (n+1) (curSum + (t+n)) ((t+n) :: acc)
+  go 0 0 []
 
-/-- Detect whether left or right is a sequential pattern. -/
-def sequentialSide (L : List Nat) : Bool := isSequential L
+/-- Scan t = 1,2,3,... until the list length is ≤ 2. -/
+def countdown (s : Nat) : List Nat :=
+  let rec try (t : Nat) :=
+    if t > s then [s] else
+      let L := buildSeq s t
+      if L.length ≤ 2 then L else try (t+1)
+  try 1
 
-/--
-  compress one side: repeatedly push a+b then recurse until 2 remain.
--/
-def compressSide : List Nat → List Nat
-| []        => []
-| [a]       => [a]
-| [a,b]     => [a,b]
-| a :: b :: rest =>
-    compressSide ((a + b) :: rest)
+/-- Normalize list to exactly 2 elements by padding left. -/
+def asPair : List Nat → List Nat
+| []        => [0,0]
+| [x]       => [0,x]
+| [x,y]     => [x,y]
+| x::y::_   => [x,y]
 
-/-- compress both sides -/
-def compress (L R : List Nat) : (List Nat × List Nat) :=
-  (compressSide L, compressSide R)
-
-/--
-  Kick operation.
-  If L is sequential, (+) kicks RIGHT: subtract 2 from left side and add 2 to right side on the (+) pivot.
-  If R is sequential, kick LEFT.
-  If neither sequential, do nothing.
-  
-  We assume lists have at least 2 numbers (after compression they always do).
--/
+/-- Apply the parity kick rule. -/
 def kick (L R : List Nat) : (List Nat × List Nat) :=
-  let L0 := L.getD 0 0
-  let L1 := L.getD 1 0
-  let R0 := R.getD 0 0
-  let R1 := R.getD 1 0
-  if sequentialSide L then
-    -- kick RIGHT: left loses 2, right gains 2
-    ([L0 - 2, L1], [R0 + 2, R1])
-  else if sequentialSide R then
-    -- kick LEFT: right loses 2, left gains 2
-    ([L0 + 2, L1], [R0 - 2, R1])
+  let a := L.getD 0 0
+  let b := L.getD 1 0
+  let c := R.getD 0 0
+  let d := R.getD 1 0
+  let sL := a + b
+  let sR := c + d
+  if sL % 2 = 0 then
+    -- Left kicks right
+    let a' := if a = 0 then 0 else a - 1
+    let c' := c + 1
+    ([a',b], [c',d])
+  else if sR % 2 = 0 then
+    -- Right kicks left
+    let c' := if c = 0 then 0 else c - 1
+    let a' := a + 1
+    ([a',b], [c',d])
   else
-    (L, R)
+    (L, R) -- freeze
 
-/--
-  One full update step:
-  1. compress both sides
-  2. check for sequential sum patterns
-  3. apply kick if needed
--/
-def step (L R : List Nat) : (List Nat × List Nat) :=
-  let (Lc, Rc) := compress L R
-  kick Lc Rc
+/-- One step: countdown both sides to pairs, then apply kick. -/
+def stepPair (sL sR : Nat) : (Nat × Nat) × (List Nat × List Nat) :=
+  let L0 := asPair (countdown sL)
+  let R0 := asPair (countdown sR)
+  let (L1, R1) := kick L0 R0
+  ((L1.sum, R1.sum), (L1, R1))
 
-/-- Check if both sides are primes and sum to the target even number. -/
-def isGoal (target : Nat) (L R : List Nat) : Bool :=
-  match L, R with
-  | [a,b], [c,d] =>
-      a.Prime && b.Prime && c.Prime && d.Prime &&
-      (a + b + c + d = target)
-  | _, _ => false
-
-/--
-  Play the tension-Goldbach convergence game.
-  Start from (L,R) initial lists representing the even number.
-  Run steps until:
-    • goal reached
-    • or max iterations
--/
-partial def runSteps (target : Nat) (L R : List Nat) (limit := 2000) : Nat → IO Unit
-| 0 => IO.println "Reached iteration limit."
-| n+1 => do
-  IO.println s!"step {limit - (n+1)} → L={L}, R={R}"
-  if isGoal target L R then
-    IO.println s!"✔️ Goal reached! {L} and {R} combine to {target} via primes."
-  else
-    let (L2, R2) := step L R
-    runSteps target L2 R2 n
-
-/--
-  Build the initial sequential lists for the decomposition
-  2N = N_left + N_right
-  where Goldbach-style tension starts from (sum left, sum right).
--/
-def initialLists (N : Nat) : (List Nat × List Nat) :=
-  let L := List.range (N/2 + 1) |>.tail
-  let R := List.range (N - N/2 + 1) |>.tail
-  (L, R)
-
-/-- Main interactive call: run the game starting from even number `n`. -/
-def play (n : Nat) : IO Unit := do
-  if n % 2 = 1 then
+/-- Run simulation. -/
+partial def run (N : Nat) (limit := 2000) : IO Unit := do
+  if N % 2 = 1 then
     IO.println "Input must be even."
   else
-    let (L, R) := initialLists n
-    runSteps n L R 2000
+    let init := (N/2, N/2)
+    let rec loop (sL sR : Nat) (i : Nat) (prev? : Option (List Nat × List Nat)) := do
+      if i = 0 then
+        IO.println "Iteration limit reached."
+      else
+        let ((sL', sR'), (Lp, Rp)) := stepPair sL sR
+        IO.println s!"step {limit - i}:  L={Lp},  R={Rp}   | sums = ({sL'}, {sR'})"
+        match prev? with
+        | none => loop sL' sR' (i - 1) (some (Lp, Rp))
+        | some (LpPrev, RpPrev) =>
+            if Lp = LpPrev ∧ Rp = RpPrev then
+              IO.println "Frozen / absorbing state."
+            else
+              loop sL' sR' (i - 1) (some (Lp, Rp))
+    loop init.1 init.2 limit none
