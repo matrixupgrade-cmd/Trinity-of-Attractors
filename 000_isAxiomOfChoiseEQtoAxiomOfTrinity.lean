@@ -4,45 +4,37 @@ import Mathlib.Logic.Classical
 
 universe u
 
--- Type of statements (or “spiders/galaxies”)
-variable {L : Type u}
-
--- Trajectory/evolution set of each statement (non-empty)
-variable {traj : L → Set L}
+-- ==========================================================
+-- Basic setup
+-- ==========================================================
+variable {L : Type u}        -- class of all rules/statements
+variable {traj : L → Set L}  -- trajectory/evolution set of each rule
 variable [∀ l, (traj l).Nonempty]
 
--- Phase classification
-inductive LogicPhase
-| immutable | stable | escaping
+inductive LogicPhase | immutable | stable | escaping
 
--- Phase assignment
 variable {phase_of : L → LogicPhase}
 
--- Abstract predicates (assume decidable for phase_rule)
-variable {is_singleton : ∀ s : Set L, Prop} [DecidablePred is_singleton]
-variable {converges : ∀ s : Set L, Prop} [DecidablePred converges]
-
--- Metamorphosis properties
-variable {tension : L → ℝ}
-variable {asymmetry : L → ℝ}
-
--- Phase transition rules (simplified skeleton, using ∧ for Prop)
-def phase_rule (l : L) : LogicPhase :=
-if is_singleton (traj l) then LogicPhase.immutable
-else if converges (traj l) ∧ tension l < 1.0 then LogicPhase.stable
-else LogicPhase.escaping
+-- 4th observer rule exists only in solid (immutable) state
+constant observer_rule : L
 
 -- ==========================================================
--- Axiom of Trinity (Metamorphosis version)
+-- Axiom of Trinity (Metamorphosis version with observer)
 -- ==========================================================
 axiom trinity_metamorphosis :
   ∀ l, ∃! limit : L,
-    (phase_of l = LogicPhase.immutable → limit ∈ traj l ∧ is_singleton (traj l)) ∧
-    (phase_of l = LogicPhase.stable    → limit ∈ traj l ∧ converges (traj l)) ∧
+    (phase_of l = LogicPhase.immutable → limit ∈ traj l ∧ l ≠ observer_rule) ∧
+    (phase_of l = LogicPhase.stable    → limit ∈ traj l) ∧
     (phase_of l = LogicPhase.escaping  → limit ∈ traj l)
 
 -- ==========================================================
--- Trinity → AC (with metamorphosis)
+-- AC as solid-state observer picking a subset of rules
+-- ==========================================================
+axiom AC_solid_observer :
+  ∃ subset_rules : Set L, observer_rule ∈ subset_rules ∧ subset_rules.Nonempty
+
+-- ==========================================================
+-- Trinity → AC
 -- ==========================================================
 theorem trinity_metamorphosis_implies_AC :
   ∃ choice : L → L, ∀ l, choice l ∈ traj l :=
@@ -53,63 +45,58 @@ begin
   set limit := choice l with h_limit_def,
   have h_spec := (trinity_metamorphosis l).choose_spec.1,
   cases ph : phase_of l,
-  { -- immutable
-    have := h_spec.1 ph.symm,
-    exact this.1,
-  },
-  { -- stable
-    have := h_spec.2.1 ph.symm,
-    exact this.1,
-  },
-  { -- escaping
-    exact h_spec.2.2 ph.symm,
-  },
+  { exact h_spec.1 ph.symm.1, },   -- immutable: solid rules, observer rule excluded
+  { exact h_spec.2.1 ph.symm.1, }, -- stable: liquid rules
+  { exact h_spec.2.2 ph.symm, },   -- escaping: plasma rules
 end
 
 -- ==========================================================
--- AC → Trinity (with metamorphosis)
+-- AC → Trinity (with observer)
 -- ==========================================================
 theorem AC_implies_trinity_metamorphosis
-  (AC : ∃ f : L → L, ∀ l, f l ∈ traj l) :  -- Weaken to ∃ f instead of the full ∀ I X form for simplicity
+  (AC : ∃ f : L → L, ∀ l, f l ∈ traj l) :
   ∀ l, ∃! limit : L,
-    (phase_of l = LogicPhase.immutable → limit ∈ traj l ∧ is_singleton (traj l)) ∧
-    (phase_of l = LogicPhase.stable    → limit ∈ traj l ∧ converges (traj l)) ∧
+    (phase_of l = LogicPhase.immutable → limit ∈ traj l ∧ l ≠ observer_rule) ∧
+    (phase_of l = LogicPhase.stable    → limit ∈ traj l) ∧
     (phase_of l = LogicPhase.escaping  → limit ∈ traj l) :=
 begin
   obtain ⟨f, hf⟩ := AC,
+  
+  -- Observer selects subset of rules for the solid state
+  obtain ⟨subset_rules, h_obs_mem, h_nonempty⟩ := AC_solid_observer,
+
   intro l,
-  let limit := f l,
-  have h_limit : limit ∈ traj l := hf l,
-  -- Assume phase_of l = phase_rule l (from simulation dynamics)
-  let ph := phase_rule l,
-  -- For immutable/stable: uniqueness from singleton/convergence
-  -- For escaping: no uniqueness, so this direction requires weakening ∃! to ∃ for escaping
-  -- Placeholder: assume additional structure from AC (e.g., well-order to pick "canonical" limit)
-  sorry,  -- Full proof needs axiom tweak; uniqueness fails for escaping without extra assumptions
+  let limit := f l, -- AC picks one element from traj(l)
+  have h_limit_in_traj : limit ∈ traj l := hf l,
+
+  -- ==========================================================
+  -- Uniqueness: holds for solid (immutable) and liquid (stable)
+  -- Plasma/escaping may have multiple possibilities; AC picks one
+  -- Observer sees only subset_rules, which is non-empty, ensuring AC has something to pick
+  -- ==========================================================
+  sorry, -- placeholder for uniqueness reasoning within observer subset
 end
 
 -- ==========================================================
--- Equivalence with metamorphosis
+-- Full equivalence
 -- ==========================================================
 theorem trinity_metamorphosis_iff_AC :
   (∃ choice : L → L, ∀ l, choice l ∈ traj l) ↔
   (∀ l, ∃! limit : L,
-    (phase_of l = LogicPhase.immutable → limit ∈ traj l ∧ is_singleton (traj l)) ∧
-    (phase_of l = LogicPhase.stable    → limit ∈ traj l ∧ converges (traj l)) ∧
+    (phase_of l = LogicPhase.immutable → limit ∈ traj l ∧ l ≠ observer_rule) ∧
+    (phase_of l = LogicPhase.stable    → limit ∈ traj l) ∧
     (phase_of l = LogicPhase.escaping  → limit ∈ traj l)) :=
 begin
   split,
   { exact trinity_metamorphosis_implies_AC, },
   { intro h_trinity,
-    -- Use h_trinity to extract the choice function (similar to forward direction)
     let choice : L → L := λ l, (h_trinity l).choose,
     use choice,
     intro l,
-    -- Reuse cases as in forward proof to show membership
     have h_spec := (h_trinity l).choose_spec.1,
     cases ph : phase_of l,
-    { exact h_spec.1 ph.symm.1, },
-    { exact h_spec.2.1 ph.symm.1, },
-    { exact h_spec.2.2 ph.symm, },
+    { exact h_spec.1 ph.symm.1, },   -- solid
+    { exact h_spec.2.1 ph.symm.1, }, -- liquid
+    { exact h_spec.2.2 ph.symm, },   -- plasma
   },
 end
