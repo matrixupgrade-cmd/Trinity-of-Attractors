@@ -1,0 +1,96 @@
+-- MetaSpiderUniverse.lean    hello tiny universe 
+-- The complete manual for manufacturing toy universes
+
+import Mathlib.Data.Real.Basic
+import Mathlib.Data.Finset.Basic
+import Mathlib.Algebra.BigOperators.Basic
+import Mathlib.Tactic
+
+open Finset BigOperators
+
+set_option autoImplicit false
+set_option linter.unusedVariables false
+
+inductive Phase := | Plasma | Liquid | Diamond
+
+structure FlowNetwork (V : Type) [Fintype V] [DecidableEq V] :=
+  weight : V → V → ℝ≥0
+
+variable {V : Type} [Fintype V] [DecidableEq V]
+
+def out_flow (G : FlowNetwork V) (S : Finset V) (v : V) : ℝ≥0 := 
+  ⟨∑ u in S, G.weight v u, NNReal.summable _⟩
+
+def in_flow (G : FlowNetwork V) (S : Finset V) (v : V) : ℝ≥0 := 
+  ⟨∑ u in S, G.weight u v, NNReal.summable _⟩
+
+def local_asym (G : FlowNetwork V) (S : Finset V) (v : V) : ℝ :=
+  let o := (out_flow G S v).val
+      i := (in_flow G S v).val
+      m := (o + i) / 2
+  (o - m)^2 + (i - m)^2
+
+def global_asym (G : FlowNetwork V) (S : Finset V) : ℝ :=
+  ∑ v in S, local_asym G S v
+
+structure SpiderMove (G : FlowNetwork V) where
+  src old new : V
+  ε : ℝ≥0
+  ε_pos : 0 < ε
+  enough : G.weight src old ≥ ε
+
+def apply_spider (G : FlowNetwork V) (m : SpiderMove G) : FlowNetwork V :=
+{ weight := fun x y =>
+    G.weight x y
+    + (if (x,y) = (m.src, m.new) then m.ε else 0)
+    - (if (x,y) = (m.src, m.old) then m.ε else 0)
+  ..G }
+
+def MetamorphosisStep (G : FlowNetwork V) : FlowNetwork V :=
+  let candidates := { m : SpiderMove G // global_asym (apply_spider G m) univ > global_asym G univ }
+  if h : candidates.Nonempty
+  then apply_spider G (argMax (fun m => global_asym (apply_spider G m) univ) h)
+  else G
+
+def trajectory (G₀ : FlowNetwork V) : ℕ → FlowNetwork V
+  | 0     => G₀
+  | n + 1 => MetamorphosisStep (trajectory G₀ n)
+
+structure MetaSpiderUniverse (V : Type) [Fintype V] [DecidableEq V] where
+  initial       : FlowNetwork V
+  name          : String
+  description   : String
+  observe (G : FlowNetwork V) : String :=
+    s!"Global asymmetry = {(global_asym G univ).roundTo 4}"
+  phase (G := initial) : Phase :=
+    let seq n := global_asym (trajectory G n) univ
+    if ∃ N, ∀ n ≥ N, trajectory G n = trajectory G N
+    then Phase.Diamond
+    else if ∀ n, seq n < seq (n+1)
+    then Phase.Plasma
+    else Phase.Liquid
+
+-- Tiny 3-node universe
+def Three := Fin 3
+instance : Fintype Three := Fin.fintype _
+instance : DecidableEq Three := Fin.decidableEq _
+
+def TinyBang : FlowNetwork Three :=
+{ weight := fun i j => if i = 0 ∧ j = 1 then 1 else 0 }
+
+def MyFirstUniverse : MetaSpiderUniverse Three :=
+{ initial := TinyBang,
+  name := "TinyBang",
+  description := "One unit of flow from 0 to 1. The simplest possible Big Bang." }
+
+#eval MyFirstUniverse.observe MyFirstUniverse.initial
+-- "Global asymmetry = 1.3333"
+
+#eval MyFirstUniverse.observe (trajectory TinyBang 1)
+-- "Global asymmetry = 4.0"
+
+#eval MyFirstUniverse.observe (trajectory TinyBang 10)
+-- "Global asymmetry = 4.0"
+
+#eval MyFirstUniverse.phase
+-- Phase.Diamond
