@@ -12,10 +12,12 @@ variable {traj : G → Set Outcome}      -- trajectories of each game
 variable [∀ g, (traj g).Nonempty]     -- nonempty trajectories
 
 -- ==========================================================
--- 2. Logical phases
+-- 2. Logical phases (Immutable / Bounded / Unbounded)
 -- ==========================================================
 inductive LogicPhase
-| plasma | liquid | diamond
+| immutable   -- fixed rules
+| bounded     -- bounded mutable rules
+| unbounded   -- unbounded mutable rules
 
 open LogicPhase
 variable {phase_of : G → LogicPhase}
@@ -33,16 +35,17 @@ axiom observer_subset :
 -- ==========================================================
 axiom AT_observer :
   ∀ g : G, ∃! limit : Outcome,
-    (phase_of g = diamond → limit ∈ traj g) ∧
-    (phase_of g = liquid  → limit ∈ traj g) ∧
-    (phase_of g = plasma  → limit ∈ traj g)
+    (phase_of g = immutable → limit ∈ traj g) ∧
+    (phase_of g = bounded   → limit ∈ traj g) ∧
+    (phase_of g = unbounded → limit ∈ traj g)
 
+-- Canonical outcome extraction
 def canonical_limit (g : G) : Outcome := Classical.choose (AT_observer g)
 
 lemma canonical_limit_spec (g : G) :
-  (phase_of g = diamond → canonical_limit g ∈ traj g) ∧
-  (phase_of g = liquid  → canonical_limit g ∈ traj g) ∧
-  (phase_of g = plasma  → canonical_limit g ∈ traj g) :=
+  (phase_of g = immutable → canonical_limit g ∈ traj g) ∧
+  (phase_of g = bounded   → canonical_limit g ∈ traj g) ∧
+  (phase_of g = unbounded → canonical_limit g ∈ traj g) :=
 (Classical.choose_spec (AT_observer g)).1
 
 -- ==========================================================
@@ -51,6 +54,7 @@ lemma canonical_limit_spec (g : G) :
 inductive Player
 | P1 | P2
 
+-- Each Outcome encodes a winner
 variable outcome_winner : Outcome → Player
 
 def Determined (g : G) : Prop :=
@@ -65,9 +69,9 @@ begin
   use f,
   intro g,
   cases ph : phase_of g,
-  { exact (canonical_limit_spec g).2.2 ph.symm },  -- plasma
-  { exact (canonical_limit_spec g).2.1 ph.symm },  -- liquid
-  { exact (canonical_limit_spec g).1   ph.symm },  -- diamond
+  { exact (canonical_limit_spec g).1 ph.symm },   -- immutable
+  { exact (canonical_limit_spec g).2.1 ph.symm }, -- bounded
+  { exact (canonical_limit_spec g).2.2 ph.symm }, -- unbounded
 end
 
 -- ==========================================================
