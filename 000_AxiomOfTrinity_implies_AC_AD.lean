@@ -61,24 +61,27 @@ def Determined (g : G) : Prop :=
   ∃ p : Player, outcome_winner (canonical_limit g) = p
 
 -- ==========================================================
--- 6a. AT ⇒ AC
+-- 6. Combined theorem: AT ⇒ AC and AD
 -- ==========================================================
-theorem AT_implies_AC : ∃ f : G → Outcome, ∀ g, f g ∈ traj g :=
+theorem AT_implies_AC_and_AD :
+  (∃ f : G → Outcome, ∀ g, f g ∈ traj g) ∧ (∀ g, Determined g) :=
 begin
+  -- AC: choice function from canonical outcome
   let f : G → Outcome := λ g, canonical_limit g,
-  use f,
-  intro g,
-  cases ph : phase_of g,
-  { exact (canonical_limit_spec g).1 ph.symm },   -- immutable
-  { exact (canonical_limit_spec g).2.1 ph.symm }, -- bounded
-  { exact (canonical_limit_spec g).2.2 ph.symm }, -- unbounded
+  have hAC : ∀ g, f g ∈ traj g,
+  { intro g,
+    cases ph : phase_of g,
+    { exact (canonical_limit_spec g).1 ph.symm },   -- immutable
+    { exact (canonical_limit_spec g).2.1 ph.symm }, -- bounded
+    { exact (canonical_limit_spec g).2.2 ph.symm }, -- unbounded
+  },
+
+  -- AD: determinacy via canonical outcome winner
+  have hAD : ∀ g, Determined g,
+  { intro g,
+    exact ⟨outcome_winner (canonical_limit g), rfl⟩,
+  },
+
+  exact ⟨⟨f, hAC⟩, hAD⟩,
 end
 
--- ==========================================================
--- 6b. AT ⇒ AD
--- ==========================================================
-theorem AT_implies_AD : ∀ g, Determined g :=
-begin
-  intro g,
-  exact ⟨outcome_winner (canonical_limit g), rfl⟩,
-end
