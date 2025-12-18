@@ -1,0 +1,54 @@
+/-!
+# Biased Sampling Bound Past Edge-of-Criticality
+
+Goal:
+- Show that once the edge-of-criticality is reached, the majority of K-step sequences
+  (samples) are “biased,” i.e., they include the high element at least once.
+- Formalize exponential suppression of pseudo-patterns (sequences avoiding high_element).
+- Fully combinatorial, finite, and deterministic.
+-/
+
+-- Finite type α with a unique “high element” Φ > μ
+variable {α : Type*} [Fintype α] [Nonempty α] [DecidableEq α]
+def N : ℕ := Fintype.card α
+variable (Φ : α → ℝ) (μ : ℝ)
+axiom exists_unique_max_strict (hμ : μ = (∑ x, Φ x) / N) :
+  ∃! x₀ : α, Φ x₀ > μ ∧ ∀ y ≠ x₀, Φ y ≤ μ
+
+def Sample (K : ℕ) := Fin K → α
+def sample_average {K : ℕ} (s : Sample K) : ℝ := (Finset.univ.sum fun i => Φ (s i)) / K
+def biased_sample {K : ℕ} (s : Sample K) : Prop := sample_average s < μ
+def high_element : α := Classical.choose (exists_unique_max_strict Φ μ (by rfl))
+
+-- Define sequences avoiding high_element (pseudo-patterns)
+def avoids_high {K : ℕ} (s : Sample K) : Prop := ∀ i, s i ≠ high_element
+
+-- Lemma: sequences avoiding high_element have exponentially fewer options
+lemma pseudo_pattern_upper_bound {K : ℕ} (Kpos : 0 < K) :
+  (Finset.univ.filter (avoids_high Φ)).card = (N - 1)^K := by
+  -- Each of K positions can pick any element except high_element
+  induction K with
+  | zero =>
+    simp [Finset.univ, avoids_high, Fin.zero_elim, pow_zero]
+  | succ K ih =>
+    -- Each new position multiplies by (N-1) choices
+    have hNpos : 0 < N := by simp
+    sorry -- combinatorial bookkeeping with Fin K+1
+
+-- Corollary: majority of sequences must include high_element for large enough K
+def K0_estimate : ℕ := Nat.ceil (Real.log (2 * N : ℝ) / Real.log ((N : ℝ)/(N-1)))
+
+lemma majority_biased_samples (Nge2 : N ≥ 2) (hμ : μ = (∑ x, Φ x) / N) :
+  ∀ K ≥ K0_estimate, 
+  (Finset.univ.filter biased_sample Φ).card ≥ N^K / 2 := by
+  intros K hK
+  -- Step 1: sequences avoiding high_element ≤ (N-1)^K
+  have hpseudo := pseudo_pattern_upper_bound Φ K (Nat.lt_of_le_of_lt (Nat.zero_le _) K0_estimate)
+  -- Step 2: For K ≥ K0_estimate, (N-1)^K ≤ N^K / 2
+  have hbound : (N-1)^K ≤ N^K / 2 := by
+    -- elementary log / exponential manipulation
+    sorry
+  -- Step 3: Filtered sequences biased_sample are complement of pseudo-patterns
+  have hcomp : (Finset.univ.filter biased_sample Φ).card = N^K - (Finset.univ.filter (avoids_high Φ)).card := by
+    sorry -- use Finset.card_compl
+  linarith
