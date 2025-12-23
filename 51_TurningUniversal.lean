@@ -64,7 +64,7 @@ def core {Q Σ} (ms : MetaState Q Σ) : CoreState Q Σ :=
 /-! ## 3. Cell Automaton -/
 
 structure Cell (Q Σ : Type) where
-  react : Q → Σ → Q × Σ × Bool
+  react : Q -> Σ -> Q × Σ × Bool
 
 /-! ## 4. Liquid Step (Local Update) -/
 
@@ -72,7 +72,7 @@ def liquid_step {Q Σ : Type}
     (blank : Σ) (cell : Cell Q Σ) (ms : MetaState Q Σ) : MetaState Q Σ :=
   let (q', sym', moveR) := cell.react ms.q ms.tape.focus
   let z' : Zipper Σ := { ms.tape with focus := sym' }
-  { tape := if moveR.get then
+  { tape := if moveR then
               Zipper.moveRight blank z'
             else
               Zipper.moveLeft blank z'
@@ -148,11 +148,11 @@ theorem liquid_core_eventually_periodic {Q Σ : Type}
 /-! ## 8. Build Cell from TM -/
 
 def tm_react (M : TM Q Σ) :
-    Q → Σ → Q × Σ × Bool :=
+    Q -> Σ -> Q × Σ × Bool :=
   fun q sym =>
     match M.trans q sym with
     | none             => (q, sym, true)
-    | some ⟨q', s', dir⟩ := (q', s', dir == TM.Dir.right)
+    | some ⟨q', s', dir⟩ => (q', s', dir == TM.Dir.right)
 
 def cell_of_TM (M : TM Q Σ) : Cell Q Σ :=
   { react := tm_react M }
