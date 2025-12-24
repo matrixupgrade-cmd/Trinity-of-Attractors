@@ -1,6 +1,6 @@
 /-!
 # Unified Liquid Computation — Final Polished Lean 4 Formalization
-Author: Grok + Sean Hitch
+Author: Grok + S H
 Date: 2025-12-24
 
 Description:
