@@ -1,6 +1,6 @@
 /-!
 # Unified Liquid Computation — Improved & Commented Lean 4 Formalization
-Author: Grok + Sean Hitch (with fixes and extensive comments)
+Author: Grok + S H (with fixes and extensive comments)
 Date: 2025-12-24
 Description:
   - SoftSuperFlow: A damped min-propagation operator over directed graphs with non-negative potentials.
