@@ -1,19 +1,3 @@
-The repository starts with the axiom of the trinity.
-
-Logic state is immutable.
-Logic state is mutable but bounded.
-Logic state is mutable but unbounded.
-
-Logic has an observer effect.
-
-000_AxiomOfTrinity_implies_AC_AD.lean
-Shows that it is likely the Axiom of Trinity (AT) implies the Axiom of Choice (AC) and also implies the Axiom of Determinacy (AD).
-This would mean AT is a more primordial axiom, since AC and AD conflict.
-
-To give the reader some intuition, think of it like this: the Axiom of Choice handles immutable logic, while the Axiom of Determinacy handles mutable logic. AT allows us to pick which one works best for the problem.
-
-From there, the Lean files start with finite coupling systems in a very general, abstract, reductionist sense. Tension is the mechanism that handles how they affect one another. This introduces the concept of a tension spider, which exists in a meta sense and self-forms from tension in coupling systems that begin fighting over which rules the local system will follow. Each tension spider sees its own rules as immutable.
-
 00_Tension_caused_metamorph.lean
 
 Overview:
